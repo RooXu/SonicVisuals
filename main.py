@@ -39,18 +39,22 @@ def readVid():
 def randoSine():
     a.freq = random.choice(midiToHz([60, 62, 63, 65, 67, 68, 71, 72]))
 
-def vidstuff():
-    ret, frame = cap.read()
-    average_color_row = np.average(frame, axis=0)
-    average_color = np.average(average_color_row, axis=0)
-    #print(average_color)
-    a.freq = int(average_color[0])*10
-#Ca = CallAfter(function = grabVid, time = 5).out()
-#pat2 = Pattern(function = readVid, time = 0.29).out()
-#pat3 = Pattern(function= randoSine, time =0.3).play()
-#pat4 = Pattern(function=vidstuff,time = 0.25).play()
-    
+# With type=2, the scale use octave.degree notation.
+scl = EventScale(root="C", scale="wholeTone", first=4, octaves=2, type=2)
+
+
+def changeScale():
+    "This function asks for a new scale based on new random values."
+    scl.root = random.choice(["C", "D", "F"])
+    scl.scale = random.choice(["ionian", "dorian", "phrygian"])
+    scl.first = random.randint(3, 5)
+
+    # Show the new scale parameters.
+    print("Root = %s, scale = %s, first octave = %d" % (scl.root, scl.scale, scl.first))
+
+maxPixFrac = 0.5
 def pixChange(): 
+    global maxPixFrac
     #Reading Two Frames 
     ret1,img1 = cap.read() 
     ret2,img2 = cap.read()
@@ -73,21 +77,42 @@ def pixChange():
     print("Pixel Fraction"+ str(pixFrac))
 
     #Rescale the fraction to realistic pitches
-    pxFreq = rescale(pixFrac,0,1,0,2000)
-
+    pxFreq = rescale(pixFrac,0,1,30,maxPixFrac) #changed to decibel range
     #Generate a group of notes to play
     pxFreqs = [pxFreq/3,pxFreq/2,pxFreq,pxFreq*3,pxFreq*5,pxFreq*6,pxFreq*5,pxFreq*3,pxFreq,pxFreq/2]
-    print("FreqList:" + str(pxFreqs))
-    return EventSeq(pxFreqs)
+    
+    if pxFreq < 6:
+        pxFreq = 6 
+        maxPixFrac+=2
+    else: 
+        maxPixFrac-=1
+    print("FreqList:" + str(-pxFreq))
+    return -(pxFreq)
 
 def update(): 
+    #changeScale()
     pixChangeEvent.play()
-
+curNoteIndx = 0
+phrygScl = 5+0.1* np.array([0.0, 1., 3., 5., 7., 8., 10., 8., 7., 5., 3., 1.])
+def getNote(): 
+    global curNoteIndx
+    curNoteIndx+=1
+    if curNoteIndx > np.size(phrygScl)-1:
+        curNoteIndx = 0
+    return phrygScl[curNoteIndx]
 #The first argument that reaches the end of its sequence triggers the end of the Events’s playback
-pixChangeEvent = Events(freq = EventCall(pixChange), beat = EventSeq([2/3.,1/3.])).play()
-
+#pixChangeEvent = Events(freq = EventCall(pixChange), beat = EventSeq([2/3.,1/3.])).play() #This one was for random frequencies
+pixChangeEvent = Events(
+    degree=EventSeq(scl),
+    beat=1 / 6.0,
+    db=EventCall(pixChange),
+    attack=0.01,
+    decay=0.5,
+    sustain=0.01,
+    release=0.01,
+).play()
 # Calls the update which calls on pixChangeEvent to obtain a new set of frequencies to play through.
-pat = Pattern(function = update, time = 5).play()
+#pat = Pattern(function = update, time = 5).play()
 
 #distort = Disto(pixChangeEvent, drive = 0.1, slope = 0.5, mul = 1, add = 0)
 s.gui(locals())
